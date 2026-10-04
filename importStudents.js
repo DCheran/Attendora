@@ -1,11 +1,9 @@
 const XLSX = require("xlsx");
-const mysql = require("mysql2/promise");
+const db = require("./config/pgdb");
 
 const filePath = "./students.xlsx";
 
 async function importStudents() {
-    let connection;
-
     try {
         // Read Excel file
         const workbook = XLSX.readFile(filePath);
@@ -19,6 +17,10 @@ async function importStudents() {
 
         const students = XLSX.utils.sheet_to_json(sheet);
 
+        if (students.length === 0) {
+            throw new Error("No student records found in the Excel sheet");
+        }
+
         console.log("Excel columns:");
         console.log(Object.keys(students[0]));
 
@@ -27,25 +29,26 @@ async function importStudents() {
 
         console.log(`Found ${students.length} students in Excel.`);
 
-        // MySQL connection
-        connection = await mysql.createConnection({
-            host: "localhost",
-            user: "root",
-            password: "Admin@123",
-            database: "eventiqa_attendance"
-        });
-
-        console.log("Connected to MySQL.");
-
         let imported = 0;
         let skipped = 0;
 
         for (const student of students) {
 
-            const rollNumber = String(student["Roll Number"] || "").trim();
-            const studentName = String(student["Student Name "] || "").trim();
-            const branch = String(student["Branch"] || "").trim();
-            const batch = String(student["Batch"] || "").trim();
+            const rollNumber = String(
+                student["Roll Number"] || ""
+            ).trim();
+
+            const studentName = String(
+                student["Student Name "] || ""
+            ).trim();
+
+            const branch = String(
+                student["Branch"] || ""
+            ).trim();
+
+            const batch = String(
+                student["Batch"] || ""
+            ).trim();
 
             // Skip incomplete rows
             if (!rollNumber || !studentName || !branch) {
@@ -54,33 +57,40 @@ async function importStudents() {
             }
 
             // Find department
-            const [departmentRows] = await connection.execute(
-                "SELECT id FROM departments WHERE name = ?",
+            const departmentResult = await db.query(
+                "SELECT id FROM departments WHERE name = $1",
                 [branch]
             );
 
             let departmentId;
 
-            if (departmentRows.length > 0) {
-                departmentId = departmentRows[0].id;
+            if (departmentResult.rows.length > 0) {
+                departmentId = departmentResult.rows[0].id;
             } else {
                 // Create department automatically
-                const [result] = await connection.execute(
-                    "INSERT INTO departments (name) VALUES (?)",
+                const insertDepartmentResult = await db.query(
+                    "INSERT INTO departments (name) VALUES ($1) RETURNING id",
                     [branch]
                 );
 
-                departmentId = result.insertId;
+                departmentId = insertDepartmentResult.rows[0].id;
 
                 console.log(`Created department: ${branch}`);
             }
 
             // Insert student
             try {
-                await connection.execute(
-                    `INSERT INTO students
-                    (roll_number, student_name, department_id, batch)
-                    VALUES (?, ?, ?, ?)`,
+                await db.query(
+                    `
+                    INSERT INTO students
+                    (
+                        roll_number,
+                        student_name,
+                        department_id,
+                        batch
+                    )
+                    VALUES ($1, $2, $3, $4)
+                    `,
                     [
                         rollNumber,
                         studentName,
@@ -94,11 +104,13 @@ async function importStudents() {
             } catch (error) {
 
                 // Duplicate roll number
-                if (error.code === "ER_DUP_ENTRY") {
+                if (error.code === "23505") {
                     skipped++;
+
                     console.log(
                         `Skipped duplicate: ${rollNumber} - ${studentName}`
                     );
+
                 } else {
                     throw error;
                 }
@@ -116,9 +128,7 @@ async function importStudents() {
         console.error(error.message);
 
     } finally {
-        if (connection) {
-            await connection.end();
-        }
+        await db.end();
     }
 }
 

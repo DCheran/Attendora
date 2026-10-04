@@ -1,5 +1,5 @@
 const bcrypt = require("bcrypt");
-const db = require("./config/db");
+const db = require("./config/pgdb");
 
 // Change these values before running this script in your environment.
 const MASTER = {
@@ -12,29 +12,59 @@ const MASTER = {
 async function setup() {
     try {
         if (MASTER.password === "PAT@123") {
-            throw new Error("Set MASTER_PASSWORD in .env before running setupMasterAccount.js");
+            throw new Error(
+                "Set MASTER_PASSWORD in .env before running setupMasterAccount.js"
+            );
         }
 
-        const passwordHash = await bcrypt.hash(MASTER.password, 10);
-
-        await db.execute(
-            `INSERT INTO master_credentials (username, password_hash, name, email, is_active)
-             VALUES (?, ?, ?, ?, 1)
-             ON DUPLICATE KEY UPDATE
-                 password_hash = VALUES(password_hash),
-                 name = VALUES(name),
-                 email = VALUES(email),
-                 is_active = 1`,
-            [MASTER.username, passwordHash, MASTER.name, MASTER.email]
+        const passwordHash = await bcrypt.hash(
+            MASTER.password,
+            10
         );
 
-        console.log(`Master account configured: ${MASTER.username}`);
+        await db.query(
+            `
+            INSERT INTO master_credentials
+            (
+                username,
+                password_hash,
+                name,
+                email,
+                is_active
+            )
+            VALUES ($1, $2, $3, $4, TRUE)
+
+            ON CONFLICT (username)
+            DO UPDATE SET
+                password_hash = EXCLUDED.password_hash,
+                name = EXCLUDED.name,
+                email = EXCLUDED.email,
+                is_active = TRUE
+            `,
+            [
+                MASTER.username,
+                passwordHash,
+                MASTER.name,
+                MASTER.email
+            ]
+        );
+
+        console.log(
+            `Master account configured: ${MASTER.username}`
+        );
+
     } catch (error) {
-        console.error("Master account setup failed:", error.message);
+        console.error(
+            "Master account setup failed:",
+            error.message
+        );
+
         process.exitCode = 1;
+
     } finally {
         await db.end();
     }
 }
 
 setup();
+

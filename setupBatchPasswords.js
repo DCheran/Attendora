@@ -1,5 +1,5 @@
 const bcrypt = require("bcrypt");
-const db = require("./config/db");
+const db = require("./config/pgdb");
 
 const batches = [
   "G1B1",
@@ -23,9 +23,9 @@ async function setup() {
 
       await db.query(
         `INSERT INTO batch_credentials (batch, password_hash)
-         VALUES (?, ?)
-         ON DUPLICATE KEY UPDATE
-         password_hash = VALUES(password_hash)`,
+         VALUES ($1, $2)
+         ON CONFLICT (batch)
+         DO UPDATE SET password_hash = EXCLUDED.password_hash`,
         [batch, passwordHash]
       );
 
