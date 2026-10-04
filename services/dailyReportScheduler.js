@@ -45,10 +45,9 @@ const startDailyReportScheduler = () => {
                     /*
                      * Use today's date.
                      */
-                    const attendanceDate =
-                        new Date()
-                            .toISOString()
-                            .split("T")[0];
+                    const attendanceDate = new Date().toLocaleDateString("en-CA", {
+                        timeZone: "Asia/Kolkata",
+                    });
 
                     /*
                      * Generate report.
