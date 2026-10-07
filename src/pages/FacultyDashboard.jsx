@@ -225,7 +225,7 @@ function FacultyDashboard() {
       }));
 
       const response = await fetch(
-        "${import.meta.env.VITE_API_URL}/api/attendance/mark",
+        `${import.meta.env.VITE_API_URL}/api/attendance/mark`,
         {
           method: "POST",
 
@@ -680,7 +680,7 @@ function FacultyDashboard() {
 
       try {
           const response = await fetch(
-              "${import.meta.env.VITE_API_URL}/api/attendance/corrections",
+              `${import.meta.env.VITE_API_URL}/api/attendance/corrections`,
               {
                   headers: {
                       Authorization: `Bearer ${token}`
